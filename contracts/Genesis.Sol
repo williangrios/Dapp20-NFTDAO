@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.9;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+contract Genesis is ERC721, ERC721Burnable, Ownable {
+    
+    //DAO Data
+    struct Proposal {
+        uint id;
+        string name;
+        uint end;
+        VotesDetails[] votes;
+    }
+
+    struct VotesDetails{
+        string option;
+        uint votesCount;
+    }
+    mapping (uint => Proposal) public proposals;
+    //voter cannot vote twice
+    mapping (address => mapping(uint => bool)) public votes;
+    uint public nextProposalId = 0;
+
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIdCounter;
+
+    constructor() ERC721("GENESIS DAO", "GDAO") {}
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "HTTPS://#";
+    }
+
+    function safeMint(address to) public onlyOwner {
+        uint256 tokenId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
+        _safeMint(to, tokenId);
+    }
+
+    ///DAO FUNCTIONS
+    function createProposal(string memory name, uint offset, string[] memory opt) onlyHolders() external {
+        //loop 
+        proposals[nextProposalId].id = nextProposalId;
+        proposals[nextProposalId].name = name;
+        proposals[nextProposalId].end = block.timestamp + offset;
+        for(uint i = 0; i < opt.length ; i++) {
+            proposals[nextProposalId].votes.push(VotesDetails(opt[i], 0));
+        }        
+        nextProposalId ++;
+    }
+
+    function vote(uint proposalId, uint voteOption) onlyHolders() external {
+        Proposal storage proposal = proposals[proposalId];
+        require(votes[msg.sender][proposalId] == false, "Holders podem votar apenas uma vez.");
+        require(block.timestamp < proposal.end, unicode"O tempo de votação acabou, não é possível mais votar");
+        votes[msg.sender][proposalId] = true;
+        proposal.votes[voteOption].votesCount += 1;
+    }
+
+    function getProposal(uint proposalId) view external returns(Proposal memory){
+        return proposals[proposalId];
+    }
+
+    modifier onlyHolders() {
+        require(balanceOf(msg.sender) >= 1, unicode"Função apenas para holders do Genesis DAO NFT");
+        _;
+    }
+}
